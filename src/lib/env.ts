@@ -25,10 +25,13 @@ export function getServerEnv(): ServerEnv {
   })
 
   if (!parsed.success) {
-    const issues = parsed.error.issues
-      .map((issue) => issue.message)
+    const missing = parsed.error.issues
+      .map((issue) => String(issue.path[0] ?? 'unknown'))
       .join(', ')
-    throw new Error(`Invalid server environment: ${issues}`)
+    throw new Error(
+      `Missing or invalid server environment variable(s): ${missing}. ` +
+        'Set them in your Vercel project settings (scoped to Production) and redeploy.',
+    )
   }
 
   cached = parsed.data
