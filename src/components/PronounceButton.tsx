@@ -1,6 +1,11 @@
 import { useEffect, useState } from 'react'
 import { Turtle, Volume2, VolumeX } from 'lucide-react'
-import { isSpeechSupported, primeVoices, speakFrench } from '../lib/speech'
+import {
+  frenchVoiceStatus,
+  isSpeechSupported,
+  primeVoices,
+  speakFrench,
+} from '../lib/speech'
 
 interface PronounceButtonProps {
   text: string
@@ -10,16 +15,25 @@ interface PronounceButtonProps {
 
 /**
  * Listen buttons (normal + slow speed) for a French word/sentence.
- * Renders a disabled, explained state when the browser lacks Web Speech support.
+ * Degrades clearly when the browser lacks Web Speech support, or when the
+ * device has no French voice installed (which would otherwise mispronounce).
  */
 export function PronounceButton({ text, size = 'md' }: PronounceButtonProps) {
   // Start optimistic (matches SSR), then confirm on the client.
   const [supported, setSupported] = useState(true)
+  const [noFrenchVoice, setNoFrenchVoice] = useState(false)
 
   useEffect(() => {
     const ok = isSpeechSupported()
     setSupported(ok)
-    if (ok) primeVoices()
+    if (!ok) return
+
+    primeVoices()
+    const update = () => setNoFrenchVoice(frenchVoiceStatus() === 'missing')
+    update()
+    window.speechSynthesis.addEventListener('voiceschanged', update)
+    return () =>
+      window.speechSynthesis.removeEventListener('voiceschanged', update)
   }, [])
 
   const iconSize = size === 'sm' ? 16 : 20
@@ -31,6 +45,20 @@ export function PronounceButton({ text, size = 'md' }: PronounceButtonProps) {
         className={`inline-flex ${pad} text-slate-300`}
         title="النطق غير مدعوم في هذا المتصفح"
         aria-hidden="true"
+      >
+        <VolumeX size={iconSize} />
+      </span>
+    )
+  }
+
+  // Voices loaded but no French one → reading would use the device's default
+  // (e.g. Chinese) voice. Signal it instead of playing a wrong-accent reading.
+  if (noFrenchVoice) {
+    return (
+      <span
+        className={`inline-flex ${pad} text-amber-500`}
+        title="لا يوجد صوت فرنسي مثبّت على هذا الجهاز. ثبّت حزمة النطق الفرنسية (Google Text-to-Speech) لتفعيل النطق."
+        aria-label="النطق الفرنسي غير متوفّر — ثبّت حزمة النطق الفرنسية"
       >
         <VolumeX size={iconSize} />
       </span>

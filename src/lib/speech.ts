@@ -56,6 +56,23 @@ function pickFrenchVoice(): SpeechSynthesisVoice | null {
   return nice ?? pool[0] ?? null
 }
 
+export type FrenchVoiceStatus = 'available' | 'missing' | 'unknown'
+
+/**
+ * Whether a French voice is installed on this device.
+ * - 'available': at least one fr-* voice exists
+ * - 'missing': voices are loaded but none is French (→ would mispronounce)
+ * - 'unknown': voice list not ready yet (can't tell)
+ */
+export function frenchVoiceStatus(): FrenchVoiceStatus {
+  if (!isSpeechSupported()) return 'unknown'
+  const voices = voicesCache.length > 0 ? voicesCache : refreshVoices()
+  if (voices.length === 0) return 'unknown'
+  return voices.some((v) => v.lang.toLowerCase().startsWith('fr'))
+    ? 'available'
+    : 'missing'
+}
+
 /** Remove parenthetical content (e.g. an Arabic gloss) so TTS reads only the French. */
 export function frenchOnly(text: string): string {
   return text.replace(/\(.*?\)/g, '').trim() || text
@@ -70,12 +87,16 @@ export function speakFrench(text: string, options: SpeakOptions = {}): void {
   const clean = text.trim()
   if (!clean) return
 
+  const voice = pickFrenchVoice()
+  // If voices are loaded and none is French, stay silent instead of reading
+  // the French text with the device's default (e.g. Chinese) voice.
+  if (!voice && frenchVoiceStatus() === 'missing') return
+
   const synth = window.speechSynthesis
   synth.cancel() // interrupt anything currently speaking
 
   const utterance = new SpeechSynthesisUtterance(clean)
   utterance.lang = 'fr-FR'
-  const voice = pickFrenchVoice()
   if (voice) utterance.voice = voice
   utterance.rate = options.slow ? 0.6 : 1
   utterance.pitch = 1
