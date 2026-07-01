@@ -1,0 +1,5 @@
+# Normalize line endings: store as LF in the repo, so Linux (Vercel) builds are consistent.
+* text=auto eol=lf
+
+# Binary/generated files
+package-lock.json -diff

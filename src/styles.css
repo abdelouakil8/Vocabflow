@@ -1,0 +1,27 @@
+@import "tailwindcss";
+
+/* ---- Tailwind v4 CSS-first theme (Inter for Latin, Cairo for Arabic) ---- */
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-arabic: "Cairo", "Inter", sans-serif;
+}
+
+/* Arabic text (translations, RTL blocks) renders with Cairo automatically. */
+@layer base {
+  :lang(ar),
+  [dir="rtl"] {
+    font-family: var(--font-arabic);
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+    scroll-behavior: smooth;
+  }
+
+  /* Avoid iOS auto-zoom on focus by keeping inputs >= 16px on small screens. */
+  input,
+  textarea,
+  select {
+    font-size: 16px;
+  }
+}
