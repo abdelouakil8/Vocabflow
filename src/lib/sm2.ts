@@ -29,6 +29,7 @@ export interface Sm2Result {
 }
 
 const MIN_EASE_FACTOR = 1.3
+const MAX_INTERVAL_DAYS = 90
 const MS_PER_DAY = 24 * 60 * 60 * 1000
 
 /** Recommended 4-button → SM-2 quality mapping. */
@@ -78,7 +79,10 @@ export function sm2(
       nextInterval = 6
     } else {
       // Uses the EF value from *before* this review's update.
-      nextInterval = Math.round(intervalDays * easeFactor)
+      nextInterval = Math.min(
+        Math.round(intervalDays * easeFactor),
+        MAX_INTERVAL_DAYS,
+      )
     }
 
     // EF' = EF + (0.1 - (5 - q) * (0.08 + (5 - q) * 0.02)), floored at 1.3.

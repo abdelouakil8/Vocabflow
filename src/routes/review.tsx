@@ -124,8 +124,8 @@ function ReviewSession() {
     return (
       <CenteredMessage
         icon={<PartyPopper size={32} />}
-        title="لا كلمات مستحقة الآن"
-        subtitle="أنجزت كل المراجعات المستحقة. عُد لاحقًا!"
+        title="لا كلمات للمراجعة"
+        subtitle="جميع كلماتك متقنة. عُد لاحقًا!"
         onBack={goToDashboard}
       />
     )

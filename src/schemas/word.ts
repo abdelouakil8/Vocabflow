@@ -12,8 +12,8 @@ export const submitReviewSchema = z.object({
 })
 export type SubmitReviewInput = z.infer<typeof submitReviewSchema>
 
-/** Learning status derived from SM-2 state. */
-export type WordStatus = 'new' | 'learning' | 'mastered'
+/** Learning status derived from SM-2 state (5 levels). */
+export type WordStatus = 'new' | 'beginner' | 'familiar' | 'confident' | 'mastered'
 
 /** A single card shown during a review session. */
 export interface ReviewCard {
@@ -43,8 +43,11 @@ export interface WordListItem {
 export interface DashboardStats {
   total: number
   due: number
+  reviewable: number
   newCount: number
-  learning: number
+  beginner: number
+  familiar: number
+  confident: number
   mastered: number
   currentStreak: number
   longestStreak: number

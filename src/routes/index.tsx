@@ -2,14 +2,17 @@ import { useEffect } from 'react'
 import { createFileRoute, Link, useRouter } from '@tanstack/react-router'
 import {
   BookOpen,
+  Eye,
   Flame,
   GraduationCap,
   Layers,
   Play,
+  Shield,
   Sparkles,
   TrendingUp,
 } from 'lucide-react'
 import { getDashboardStats } from '../server/words'
+import type { DashboardStats } from '../schemas/word'
 import { syncFromSheet } from '../server/sync'
 import { StatCard } from '../components/StatCard'
 import { SyncButton } from '../components/SyncButton'
@@ -22,6 +25,28 @@ export const Route = createFileRoute('/')({
   component: Dashboard,
   pendingComponent: DashboardPending,
 })
+
+function getSmartMessage(stats: DashboardStats): string {
+  if (stats.reviewable > 0 && stats.due > 0) {
+    return `لديك ${stats.due} كلمة مستحقة للمراجعة — الأضعف أولاً.`
+  }
+  if (stats.reviewable > 0 && stats.due === 0) {
+    return `أنهيت المستحقات! ${stats.reviewable} كلمة متاحة للمراجعة الإضافية.`
+  }
+  if (stats.mastered === stats.total && stats.total > 0) {
+    return `أتقنت كل كلماتك! 🎉 ستعود للمراجعة تلقائياً.`
+  }
+  return 'راحة مستحقة — مراجعتك القادمة قريباً ⏰'
+}
+
+/** 5-level progress bar segments */
+const LEVEL_CONFIG = [
+  { key: 'mastered' as const, label: 'متقنة', color: 'bg-amber-400' },
+  { key: 'confident' as const, label: 'واثقة', color: 'bg-emerald-400' },
+  { key: 'familiar' as const, label: 'مألوفة', color: 'bg-yellow-400' },
+  { key: 'beginner' as const, label: 'مبتدئة', color: 'bg-red-400' },
+  { key: 'newCount' as const, label: 'جديدة', color: 'bg-slate-300' },
+]
 
 function Dashboard() {
   const stats = Route.useLoaderData()
@@ -60,23 +85,22 @@ function Dashboard() {
     )
   }
 
+  const message = getSmartMessage(stats)
+  const hasCards = stats.reviewable > 0
+
   return (
     <main className="mx-auto max-w-3xl px-4 py-6">
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-slate-800">أهلًا 👋</h1>
-        <p className="mt-1 text-sm text-slate-500">
-          {stats.due > 0
-            ? `لديك ${stats.due} كلمة مستحقة للمراجعة اليوم.`
-            : 'لا كلمات مستحقة الآن — أحسنت!'}
-        </p>
+        <p className="mt-1 text-sm text-slate-500">{message}</p>
       </div>
 
-      {/* Primary CTA */}
+      {/* Primary CTA — always active when there are reviewable cards */}
       <Link
         to="/review"
-        disabled={stats.due === 0}
+        disabled={!hasCards}
         className={`group relative mb-6 flex items-center justify-between overflow-hidden rounded-2xl p-6 transition-all ${
-          stats.due > 0
+          hasCards
             ? 'bg-indigo-600 text-white shadow-lg hover:bg-indigo-700'
             : 'pointer-events-none cursor-not-allowed bg-slate-100 text-slate-400'
         }`}
@@ -85,22 +109,62 @@ function Dashboard() {
           <p className="text-lg font-bold">ابدأ جلسة المراجعة</p>
           <p
             className={`mt-0.5 text-sm ${
-              stats.due > 0 ? 'text-indigo-100' : 'text-slate-400'
+              hasCards ? 'text-indigo-100' : 'text-slate-400'
             }`}
           >
-            {stats.due > 0
-              ? `${stats.due} بطاقة بانتظارك`
-              : 'لا شيء مستحق الآن'}
+            {hasCards
+              ? `${stats.reviewable} كلمة للمراجعة`
+              : 'كل الكلمات متقنة — أحسنت!'}
           </p>
         </div>
         <span
           className={`flex h-12 w-12 items-center justify-center rounded-xl ${
-            stats.due > 0 ? 'bg-white/20' : 'bg-white/40'
+            hasCards ? 'bg-white/20' : 'bg-white/40'
           }`}
         >
           <Play size={24} fill="currentColor" />
         </span>
       </Link>
+
+      {/* 5-level progress bar */}
+      {stats.total > 0 && (
+        <div className="mb-6">
+          <div className="mb-2 flex items-center justify-between text-xs text-slate-500">
+            <span>تقدّمك</span>
+            <span>
+              {Math.round((stats.mastered / stats.total) * 100)}% إتقان
+            </span>
+          </div>
+          <div className="flex h-3 overflow-hidden rounded-full bg-slate-100">
+            {LEVEL_CONFIG.map(({ key, color }) => {
+              const count = stats[key]
+              if (count === 0) return null
+              const pct = (count / stats.total) * 100
+              return (
+                <div
+                  key={key}
+                  className={`${color} transition-all duration-500`}
+                  style={{ width: `${pct}%` }}
+                />
+              )
+            })}
+          </div>
+          <div className="mt-2 flex flex-wrap justify-center gap-x-4 gap-y-1 text-xs text-slate-500">
+            {LEVEL_CONFIG.map(({ key, label, color }) => {
+              const count = stats[key]
+              if (count === 0) return null
+              return (
+                <span key={key} className="flex items-center gap-1">
+                  <span
+                    className={`inline-block h-2 w-2 rounded-full ${color}`}
+                  />
+                  {label} {count}
+                </span>
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Stats grid (mobile-first: 2 columns) */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
@@ -111,8 +175,8 @@ function Dashboard() {
           accent="bg-blue-50 text-blue-600"
         />
         <StatCard
-          label="مستحقة اليوم"
-          value={stats.due}
+          label="للمراجعة"
+          value={stats.reviewable}
           icon={<TrendingUp size={20} />}
           accent="bg-amber-50 text-amber-600"
         />
@@ -120,30 +184,25 @@ function Dashboard() {
           label="مُتقَنة"
           value={stats.mastered}
           icon={<GraduationCap size={20} />}
-          accent="bg-green-50 text-green-600"
+          accent="bg-amber-50 text-amber-500"
         />
         <StatCard
-          label="قيد التعلّم"
-          value={stats.learning}
-          icon={<BookOpen size={20} />}
-          accent="bg-purple-50 text-purple-600"
+          label="واثقة"
+          value={stats.confident}
+          icon={<Shield size={20} />}
+          accent="bg-emerald-50 text-emerald-600"
         />
         <StatCard
-          label="جديدة"
-          value={stats.newCount}
+          label="مألوفة"
+          value={stats.familiar}
+          icon={<Eye size={20} />}
+          accent="bg-yellow-50 text-yellow-600"
+        />
+        <StatCard
+          label="مبتدئة + جديدة"
+          value={stats.beginner + stats.newCount}
           icon={<Sparkles size={20} />}
-          accent="bg-indigo-50 text-indigo-600"
-        />
-        <StatCard
-          label="أطول سلسلة"
-          value={
-            <span className="flex items-baseline gap-1">
-              {stats.longestStreak}
-              <span className="text-xs font-normal text-slate-400">يوم</span>
-            </span>
-          }
-          icon={<Flame size={20} />}
-          accent="bg-orange-50 text-orange-600"
+          accent="bg-red-50 text-red-500"
         />
       </div>
 

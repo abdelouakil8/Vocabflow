@@ -16,8 +16,10 @@ const STATUS_META: Record<
   { label: string; dot: string; text: string }
 > = {
   new: { label: 'جديدة', dot: 'bg-slate-300', text: 'text-slate-500' },
-  learning: { label: 'قيد التعلّم', dot: 'bg-amber-400', text: 'text-amber-600' },
-  mastered: { label: 'مُتقَنة', dot: 'bg-green-500', text: 'text-green-600' },
+  beginner: { label: 'مبتدئة', dot: 'bg-red-400', text: 'text-red-600' },
+  familiar: { label: 'مألوفة', dot: 'bg-yellow-400', text: 'text-yellow-600' },
+  confident: { label: 'واثقة', dot: 'bg-emerald-400', text: 'text-emerald-600' },
+  mastered: { label: 'مُتقَنة', dot: 'bg-amber-400', text: 'text-amber-600' },
 }
 
 function WordsPage() {

@@ -1,15 +1,24 @@
 import { createServerFn } from '@tanstack/react-start'
-import { asc, eq, lte } from 'drizzle-orm'
+import { asc, desc, eq, isNull, lt, lte, or, sql } from 'drizzle-orm'
 import { getDb } from '../db'
 import { reviewLogs, wordProgress, words } from '../db/schema'
-import { computeStreaks, deriveStatus } from '../lib/stats'
+import { MATURE_INTERVAL_DAYS, computeStreaks, deriveStatus } from '../lib/stats'
 import type {
   DashboardStats,
   ReviewCard,
   WordListItem,
 } from '../schemas/word'
 
-/** Cards due now (dueDate <= now), ordered by priority: soonest due, then hardest. */
+/**
+ * All cards that need the user's attention, in priority order:
+ *   1. Due cards (dueDate <= now) — SM-2 scheduled reviews
+ *   2. New cards (never reviewed) — waiting to be learned
+ *   3. Non-mastered cards not yet due — available for extra study
+ * Mastered cards only appear when their dueDate <= now (periodic re-check).
+ *
+ * Within each group, weakest cards come first:
+ *   lapses DESC → easeFactor ASC → intervalDays ASC → dueDate ASC
+ */
 export const getDueCards = createServerFn({ method: 'GET' }).handler(
   async (): Promise<Array<ReviewCard>> => {
     const db = getDb()
@@ -23,17 +32,40 @@ export const getDueCards = createServerFn({ method: 'GET' }).handler(
         type: words.type,
         arabicMeaning: words.arabicMeaning,
         exampleSentence: words.exampleSentence,
+        dueDate: wordProgress.dueDate,
+        intervalDays: wordProgress.intervalDays,
+        lapses: wordProgress.lapses,
+        easeFactor: wordProgress.easeFactor,
+        lastReviewedAt: wordProgress.lastReviewedAt,
       })
       .from(wordProgress)
       .innerJoin(words, eq(words.id, wordProgress.wordId))
-      .where(lte(wordProgress.dueDate, now))
-      .orderBy(
-        asc(wordProgress.dueDate),
-        asc(wordProgress.easeFactor),
-        asc(words.id),
+      .where(
+        or(
+          lte(wordProgress.dueDate, now), // due (includes mastered-but-due)
+          lt(wordProgress.intervalDays, MATURE_INTERVAL_DAYS), // non-mastered
+          isNull(wordProgress.lastReviewedAt), // never reviewed
+        ),
       )
+      .orderBy(
+        // Due cards first, then the rest
+        sql`CASE WHEN ${wordProgress.dueDate} <= ${now} THEN 0 ELSE 1 END`,
+        // Within each group: weakest first
+        desc(wordProgress.lapses),
+        asc(wordProgress.easeFactor),
+        asc(wordProgress.intervalDays),
+        asc(wordProgress.dueDate),
+      )
+      .limit(10) // <-- Batch to max 10 cards per session for better absorption
 
-    return rows
+    return rows.map((r) => ({
+      progressId: r.progressId,
+      wordId: r.wordId,
+      frenchText: r.frenchText,
+      type: r.type,
+      arabicMeaning: r.arabicMeaning,
+      exampleSentence: r.exampleSentence,
+    }))
   },
 )
 
@@ -94,24 +126,50 @@ export const getDashboardStats = createServerFn({ method: 'GET' }).handler(
     const total = progressRows.length
     let due = 0
     let newCount = 0
-    let learning = 0
+    let beginner = 0
+    let familiar = 0
+    let confident = 0
     let mastered = 0
 
     for (const r of progressRows) {
       if (r.dueDate <= now) due += 1
       const status = deriveStatus(r.intervalDays, r.lastReviewedAt)
-      if (status === 'new') newCount += 1
-      else if (status === 'learning') learning += 1
-      else mastered += 1
+      switch (status) {
+        case 'new':
+          newCount += 1
+          break
+        case 'beginner':
+          beginner += 1
+          break
+        case 'familiar':
+          familiar += 1
+          break
+        case 'confident':
+          confident += 1
+          break
+        case 'mastered':
+          mastered += 1
+          break
+      }
     }
+
+    // Reviewable = all non-mastered + mastered-but-due
+    const reviewable = newCount + beginner + familiar + confident +
+      progressRows.filter(
+        (r) =>
+          r.intervalDays >= MATURE_INTERVAL_DAYS && r.dueDate <= now,
+      ).length
 
     const { current, longest } = computeStreaks(logs.map((l) => l.reviewedAt))
 
     return {
       total,
       due,
+      reviewable,
       newCount,
-      learning,
+      beginner,
+      familiar,
+      confident,
       mastered,
       currentStreak: current,
       longestStreak: longest,

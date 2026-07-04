@@ -6,10 +6,12 @@ export const MATURE_INTERVAL_DAYS = 21
 const MS_PER_DAY = 24 * 60 * 60 * 1000
 
 /**
- * Derive learning status from SM-2 state.
- * - never reviewed → 'new'
- * - interval >= 21 days → 'mastered'
- * - otherwise → 'learning' (includes relearning after a lapse)
+ * Derive learning status from SM-2 state (5 levels).
+ * - never reviewed         → 'new'
+ * - interval 1–2 days      → 'beginner'
+ * - interval 3–6 days      → 'familiar'
+ * - interval 7–20 days     → 'confident'
+ * - interval >= 21 days    → 'mastered' (comes back for periodic re-check)
  */
 export function deriveStatus(
   intervalDays: number,
@@ -17,7 +19,9 @@ export function deriveStatus(
 ): WordStatus {
   if (lastReviewedAt === null) return 'new'
   if (intervalDays >= MATURE_INTERVAL_DAYS) return 'mastered'
-  return 'learning'
+  if (intervalDays >= 7) return 'confident'
+  if (intervalDays >= 3) return 'familiar'
+  return 'beginner'
 }
 
 /** UTC calendar-day key (YYYY-MM-DD). */
